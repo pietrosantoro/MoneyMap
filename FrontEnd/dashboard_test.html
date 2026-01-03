@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Quantfolio (Stocks/Bonds/Cash) - Ranges Fix</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --accent: #4f46e5;
+      --accent-soft: rgba(79, 70, 229, 0.12);
+      --accent-red: #ef4444;
+      --accent-green: #22c55e;
+      --text: #f9fafb;
+      --text-dim: #9ca3af;
+      --border: #1f2937;
+      --card-radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { background: radial-gradient(circle at top, #111827 0, #020617 55%); color: var(--text); min-height: 100vh; }
+
+    .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; max-width: 1440px; margin: 0 auto; }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .sidebar { position: sticky; top: 0; z-index: 20; } }
+
+    .sidebar { background: rgba(3, 7, 18, 0.96); border-right: 1px solid var(--border); padding: 18px 18px 24px; backdrop-filter: blur(16px); }
+    .main { padding: 18px 20px 32px; }
+
+    .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .logo-dot {
+      width: 24px; height: 24px; border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #e5e7eb 0, transparent 40%),
+                  radial-gradient(circle at 70% 80%, #4f46e5 0, transparent 55%),
+                  linear-gradient(135deg, #1d4ed8, #22c55e);
+      box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35), 0 12px 30px rgba(15, 23, 42, 0.9);
+    }
+    .logo-text { font-weight: 600; font-size: 18px; letter-spacing: 0.02em; }
+    .logo-badge { font-size: 11px; padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.35); color: var(--text-dim); }
+
+    .sidebar-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin: 18px 2px 8px; }
+    .nav-list { list-style: none; }
+    .nav-item {
+      display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+      border-radius: 10px; color: var(--text-dim); font-size: 13px;
+      cursor: pointer; transition: background 0.2s, color 0.2s; user-select: none;
+    }
+    .nav-item.active { background: var(--accent-soft); color: var(--text); }
+    .nav-dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(148, 163, 184, 0.55); }
+    .nav-item.active .nav-dot { background: var(--accent); }
+
+    .sidebar-footer {
+      margin-top: 32px; padding: 10px; border-radius: 12px;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(129, 140, 248, 0.2), transparent 55%),
+                  rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      font-size: 12px; color: var(--text-dim); line-height: 1.4;
+    }
+    .sidebar-footer strong { color: var(--text); font-size: 13px; }
+
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+    .topbar-left { display: flex; flex-direction: column; gap: 2px; }
+    .topbar-title { font-size: 20px; font-weight: 600; }
+    .topbar-sub { font-size: 12px; color: var(--text-dim); }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .btn {
+      border-radius: 999px; border: 1px solid transparent; padding: 7px 12px; font-size: 12px;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; color: var(--text-dim);
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
+      user-select: none; white-space: nowrap;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f46e5, #22c55e);
+      color: #f9fafb; border-color: rgba(15, 23, 42, 0.6);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.9);
+    }
+    .btn-outline { border-color: var(--border); background: rgba(15, 23, 42, 0.8); }
+    .btn-icon {
+      width: 34px; height: 34px; padding: 0; justify-content: center;
+      border-color: var(--border); background: rgba(15, 23, 42, 0.8);
+      font-size: 16px; line-height: 1;
+    }
+    .btn:active { transform: translateY(1px); box-shadow: none; }
+
+    .summary-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+    @media (max-width: 1100px) { .summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .summary-row { grid-template-columns: 1fr; } }
+
+    .card {
+      border-radius: var(--card-radius);
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 60%),
+                  radial-gradient(circle at bottom right, rgba(129, 140, 248, 0.16), transparent 55%),
+                  rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(15, 23, 42, 0.95);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+      padding: 14px 14px 13px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card.small { box-shadow: 0 10px 30px rgba(15, 23, 42, 0.85); }
+    .card-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px; }
+    .card-main-value { font-size: 24px; font-weight: 600; margin-bottom: 2px; }
+
+    .card-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; border-radius: 999px; padding: 3px 8px;
+      background: rgba(22, 163, 74, 0.12); color: var(--accent-green);
+    }
+    .card-badge.negative { background: rgba(239, 68, 68, 0.12); color: var(--accent-red); }
+    .card-caption { margin-top: 4px; font-size: 11px; color: var(--text-dim); }
+    .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--border); padding: 2px 8px; font-size: 11px; color: var(--text-dim); background: rgba(15, 23, 42, 0.9); }
+    .chip-pill { font-size: 11px; border-radius: 999px; padding: 2px 7px; border: 1px solid rgba(75, 85, 99, 0.9); color: var(--text-dim); background: rgba(17, 24, 39, 0.98); }
+
+    .content-row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 1.3fr); gap: 12px; align-items: flex-start; }
+    @media (max-width: 1100px) { .content-row { grid-template-columns: 1fr; } }
+
+    .panel {
+      border-radius: var(--card-radius);
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(15, 23, 42, 0.92);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+      padding: 12px 14px 10px;
+      overflow: hidden;
+    }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
+    .panel-title { font-size: 13px; font-weight: 500; }
+    .panel-subtitle { font-size: 11px; color: var(--text-dim); }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(17, 24, 39, 0.92);
+      color: var(--text-dim);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tab.active { background: var(--accent-soft); color: var(--text); border-color: rgba(79, 70, 229, 0.35); }
+
+    .table-wrapper { margin-top: 6px; border-radius: 10px; border: 1px solid rgba(31, 41, 55, 0.9); overflow: hidden; background: rgba(15, 23, 42, 0.98); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead { background: radial-gradient(circle at top left, rgba(55, 65, 81, 0.7), rgba(15, 23, 42, 0.99)); }
+    th, td { padding: 8px 10px; text-align: left; white-space: nowrap; }
+    th { font-weight: 500; color: var(--text-dim); font-size: 11px; border-bottom: 1px solid rgba(31, 41, 55, 0.9); }
+    tbody tr:nth-child(even) { background: rgba(15, 23, 42, 0.98); }
+    tbody tr:nth-child(odd) { background: rgba(15, 23, 42, 0.95); }
+    tbody tr:hover { background: rgba(30, 64, 175, 0.18); }
+
+    .col-instrument { display: flex; flex-direction: column; gap: 2px; }
+    .instrument-name { font-size: 12px; }
+    .instrument-ticker { font-size: 11px; color: var(--text-dim); }
+
+    .pill { border-radius: 999px; padding: 2px 7px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+    .pill-green { background: rgba(22, 163, 74, 0.18); color: var(--accent-green); }
+    .pill-red { background: rgba(239, 68, 68, 0.18); color: var(--accent-red); }
+    .pill-neutral { background: rgba(55, 65, 81, 0.6); color: var(--text-dim); }
+
+    .text-dim { color: var(--text-dim); }
+    .text-right { text-align: right; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .tag { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); background: rgba(15, 23, 42, 0.96); }
+
+    /* Overlay STATUS */
+    #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.80); z-index: 999; display: none; align-items: center; justify-content: center; padding: 20px; }
+    #modal { width: min(760px, 100%); background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(31, 41, 55, 0.9); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); padding: 14px; }
+    #modal h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    #status { font-size: 12px; color: var(--text-dim); line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+    /* Config MODAL */
+    #configOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.80); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
+    #configModal { width: min(1100px, 100%); max-height: 86vh; overflow: auto; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(31, 41, 55, 0.9); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); padding: 14px; }
+    .config-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .config-header h2 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .config-sub { font-size: 12px; color: var(--text-dim); line-height: 1.35; }
+    .section { border: 1px solid rgba(31, 41, 55, 0.9); border-radius: 12px; padding: 10px; background: rgba(15, 23, 42, 0.92); margin-bottom: 10px; }
+    .section-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    @media (max-width: 900px) { .form-grid { grid-template-columns: 1fr; } }
+    .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+    .field input, .field select {
+      width: 100%; border-radius: 10px; border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(17, 24, 39, 0.92); color: var(--text);
+      padding: 8px 10px; outline: none; font-size: 12px;
+    }
+
+    .config-table { width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid rgba(31, 41, 55, 0.9); border-radius: 10px; overflow: hidden; }
+    .config-table th, .config-table td { padding: 8px 8px; border-bottom: 1px solid rgba(31, 41, 55, 0.6); vertical-align: top; }
+    .config-table th { font-size: 11px; color: var(--text-dim); text-align: left; background: rgba(17, 24, 39, 0.9); }
+    .config-table td input, .config-table td select {
+      width: 100%; border-radius: 10px; border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(17, 24, 39, 0.92); color: var(--text);
+      padding: 7px 8px; outline: none; font-size: 12px;
+    }
+    .row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .btn-small { border-radius: 999px; border: 1px solid rgba(31, 41, 55, 0.9); background: rgba(17, 24, 39, 0.92); color: var(--text-dim); padding: 6px 10px; font-size: 11px; cursor: pointer; user-select: none; }
+    .btn-small.danger { border-color: rgba(239, 68, 68, 0.35); color: #fecaca; background: rgba(239, 68, 68, 0.08); }
+    .config-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    code.inline { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; color: #e5e7eb; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-row">
+        <div class="logo-dot"></div>
+        <div>
+          <div class="logo-text">Quantfolio</div>
+          <span class="logo-badge">ranges fix</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="sidebar-section-title">Panoramica</div>
+        <ul class="nav-list">
+          <li class="nav-item active"><span class="nav-dot"></span><span>Dashboard</span></li>
+          <li class="nav-item"><span class="nav-dot"></span><span>Portafogli</span></li>
+          <li class="nav-item"><span class="nav-dot"></span><span>Watchlist</span></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="sidebar-section-title">Note</div>
+        <div class="sidebar-footer">
+          <strong>Perché funziona</strong><br/>
+          - I range richiesti vengono costruiti come <code class="inline">'TAB'!A4:A9</code>.<br/>
+          - I range ricevuti dalla API vengono normalizzati per evitare mismatch. [web:144][web:139]
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">Dashboard portafoglio</div>
+          <div class="topbar-sub">
+            Ultimo aggiornamento: <span id="last-sync">–</span>
+            · Stato: <span id="status-pill" class="text-dim">Pronto</span>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn btn-icon" id="btn-config" type="button" title="Configurazione">⚙</button>
+          <button class="btn btn-primary" id="btn-load" type="button">Carica dati</button>
+          <button class="btn btn-outline" id="btn-refresh-ui" type="button">Ricalcola UI</button>
+        </div>
+      </div>
+
+      <section class="summary-row">
+        <article class="card">
+          <div class="card-label">Valore portafoglio</div>
+          <div class="card-main-value" id="portfolio-value">€ 0,00</div>
+          <div>
+            <span class="card-badge" id="portfolio-delta">▲ +0,00% Totale</span>
+          </div>
+          <div class="card-caption">
+            Investito: <span id="invested-amount">€ 0,00</span> · P/L: <span id="unrealized-pl">+0,00</span>
+          </div>
+        </article>
+
+        <article class="card small">
+          <div class="card-label">Oggi</div>
+          <div class="card-main-value" id="today-pnl">+€ 0,00</div>
+          <span class="card-badge" id="today-pnl-badge">▲ +0,00%</span>
+          <div class="card-caption">Somma (dtdAmt × quote) per stock/bond (se disponibile).</div>
+        </article>
+
+        <article class="card small">
+          <div class="card-label">Strumenti</div>
+          <div class="card-main-value" id="num-instruments">0</div>
+          <span class="chip">Con ISIN <span id="num-isin">0</span></span>
+          <div class="card-caption">Cash senza ISIN.</div>
+        </article>
+
+        <article class="card small">
+          <div class="card-label">Allocazione</div>
+          <div class="card-main-value" id="alloc-top">—</div>
+          <div class="tag-row">
+            <span class="tag" id="tag-top1">—</span>
+            <span class="tag" id="tag-top2">—</span>
+          </div>
+          <div class="card-caption">Calcolata sui controvalori.</div>
+        </article>
+      </section>
+
+      <section class="content-row">
+        <section class="panel">
+          <header class="panel-header">
+            <div>
+              <div class="panel-title">Posizioni</div>
+              <div class="panel-subtitle">Tabelle separate per tipologia.</div>
+            </div>
+            <div class="tabs">
+              <button class="tab active" data-tab="stock">Stock</button>
+              <button class="tab" data-tab="bond">Bond</button>
+              <button class="tab" data-tab="cash">Cash</button>
+            </div>
+          </header>
+
+          <div class="table-wrapper" data-table="stock">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Quote</th>
+                  <th class="text-right">PMC</th>
+                  <th class="text-right">Prezzo</th>
+                  <th class="text-right">Controvalore</th>
+                  <th class="text-right">P/L</th>
+                  <th class="text-right">Oggi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-stock"></tbody>
+            </table>
+          </div>
+
+          <div class="table-wrapper" data-table="bond" style="display:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Quote</th>
+                  <th class="text-right">PMC</th>
+                  <th class="text-right">Prezzo</th>
+                  <th class="text-right">Controvalore</th>
+                  <th class="text-right">P/L</th>
+                  <th class="text-right">Oggi</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-bond"></tbody>
+            </table>
+          </div>
+
+          <div class="table-wrapper" data-table="cash" style="display:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th class="text-right">Importo</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-cash"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="stack">
+          <section class="panel">
+            <header class="panel-header">
+              <div>
+                <div class="panel-title">Andamento complessivo</div>
+                <div class="panel-subtitle">Curva demo (ultimo punto = totale).</div>
+              </div>
+              <span class="chip-pill" id="ytd-pill">YTD +0,0%</span>
+            </header>
+            <div style="width:100%; height:120px;">
+              <canvas id="equityChart"></canvas>
+            </div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-header">
+              <div>
+                <div class="panel-title">Allocazione</div>
+                <div class="panel-subtitle">Top posizioni (tutto il portafoglio).</div>
+              </div>
+              <span class="chip-pill" id="alloc-pill">—</span>
+            </header>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div style="flex:1; max-width:180px;">
+                <canvas id="allocChart"></canvas>
+              </div>
+              <div class="tag-row" style="flex:1;">
+                <span class="tag" id="tag-alloc-a">—</span>
+                <span class="tag" id="tag-alloc-b">—</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-header">
+              <div>
+                <div class="panel-title">Debug</div>
+                <div class="panel-subtitle">Config attiva</div>
+              </div>
+              <span class="chip-pill" id="config-pill">—</span>
+            </header>
+            <div class="tag-row">
+              <span class="tag" id="tag-tab">Tab: —</span>
+              <span class="tag" id="tag-sheet">Sheet: —</span>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <!-- Overlay STATUS -->
+  <div id="overlay" aria-hidden="true">
+    <div id="modal">
+      <h3>Stato</h3>
+      <div id="status">—</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-close" type="button">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config MODAL -->
+  <div id="configOverlay" aria-hidden="true">
+    <div id="configModal">
+      <div class="config-header">
+        <div>
+          <h2>Configurazione</h2>
+          <div class="config-sub">
+            Celle o range in notazione A1 (es. <code class="inline">N4:N9</code>).<br/>
+            Suggerimento: se il tab ha spazi/simboli, il codice lo quota automaticamente come <code class="inline">'TAB'</code>. [web:139]
+          </div>
+        </div>
+        <button class="btn btn-outline" id="btn-config-close" type="button">Chiudi</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Connessione Google Sheet</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Google Sheets API Key</label>
+            <input id="cfg-apiKey" placeholder="AIza..." />
+          </div>
+          <div class="field">
+            <label>Spreadsheet ID</label>
+            <input id="cfg-spreadsheetId" placeholder="1AbC... (da URL /d/<id>/edit)" />
+          </div>
+          <div class="field">
+            <label>Tab name</label>
+            <input id="cfg-tabName" placeholder="2026" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Righe (tipo + mapping)</div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+          <div class="config-sub">
+            quoteCell = quote (o importo cash), pmcCell = PMC (non serve per cash), isinCell = colonna ISIN (non serve per cash).
+            nameCell serve per cash (e come fallback opzionale).
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-small" id="btn-add-row" type="button">+ Aggiungi riga</button>
+            <button class="btn-small" id="btn-load-example" type="button">Carica esempio</button>
+          </div>
+        </div>
+
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th style="width: 10%;">Tipo</th>
+              <th style="width: 22%;">nameCell</th>
+              <th style="width: 22%;">quoteCell</th>
+              <th style="width: 18%;">pmcCell</th>
+              <th style="width: 18%;">isinCell</th>
+              <th style="width: 10%;">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="cfg-rows"></tbody>
+        </table>
+
+        <div class="config-actions">
+          <button class="btn btn-outline" id="btn-config-reset" type="button">Reset</button>
+          <button class="btn btn-primary" id="btn-config-save" type="button">Salva</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================
+    // Config + storage
+    // ============================
+    const STORAGE_KEY = "quantfolio_config_v5_ranges_fix";
+
+    const defaultConfig = {
+      apiKey: "",
+      spreadsheetId: "",
+      tabName: "2026",
+      rows: [],
+      pricing: {
+        currency: "EUR",
+        justEtfLocale: "it"
+      }
+    };
+
+    function loadConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return structuredClone(defaultConfig);
+        const parsed = JSON.parse(raw);
+        return {
+          ...structuredClone(defaultConfig),
+          ...parsed,
+          pricing: { ...structuredClone(defaultConfig.pricing), ...(parsed.pricing || {}) },
+          rows: Array.isArray(parsed.rows) ? parsed.rows : []
+        };
+      } catch {
+        return structuredClone(defaultConfig);
+      }
+    }
+
+    function saveConfig(cfg) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    }
+
+    let appConfig = loadConfig();
+    let positions = [];
+
+    // ============================
+    // Helpers
+    // ============================
+    function showOverlay(msg) {
+      const overlay = document.getElementById("overlay");
+      overlay.style.display = "flex";
+      overlay.setAttribute("aria-hidden", "false");
+      document.getElementById("status").textContent = msg || "—";
+    }
+
+    function hideOverlay() {
+      const overlay = document.getElementById("overlay");
+      overlay.style.display = "none";
+      overlay.setAttribute("aria-hidden", "true");
+    }
+
+    function setStatusPill(txt) { document.getElementById("status-pill").textContent = txt; }
+
+    function setLastSyncNow() {
+      const now = new Date();
+      document.getElementById("last-sync").textContent = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    function setConfigPill() {
+      const ok = !!appConfig.apiKey && !!appConfig.spreadsheetId && !!appConfig.tabName;
+      document.getElementById("config-pill").textContent = ok ? "OK" : "Manca config";
+      document.getElementById("tag-tab").textContent = "Tab: " + (appConfig.tabName || "—");
+      const idShort = appConfig.spreadsheetId ? (appConfig.spreadsheetId.slice(0, 6) + "…" + appConfig.spreadsheetId.slice(-4)) : "—";
+      document.getElementById("tag-sheet").textContent = "Sheet: " + idShort;
+    }
+
+    function formatCurrency(num) {
+      return Number(num || 0).toLocaleString("it-IT", { style: "currency", currency: appConfig.pricing.currency || "EUR", minimumFractionDigits: 2 });
+    }
+
+    function formatPct(num) {
+      const n = Number(num || 0);
+      const sign = n > 0 ? "+" : n < 0 ? "" : "";
+      return sign + n.toFixed(2) + "%";
+    }
+
+    function parseMoneyToNumber(x) {
+      if (typeof x === "number") return x;
+      if (x === null || x === undefined) return 0;
+      let s = String(x).trim();
+      if (!s) return 0;
+      s = s.replace(/[€\s]/g, "");
+      const hasDot = s.includes(".");
+      const hasComma = s.includes(",");
+      if (hasDot && hasComma) {
+        if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(/,/g, ".");
+        else s = s.replace(/,/g, "");
+      } else if (hasComma && !hasDot) {
+        s = s.replace(/,/g, ".");
+      }
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttr(s) { return String(s || "").replaceAll('"', "&quot;"); }
+
+    // Rimuove qualunque prefisso "qualcosa!" e lascia A1 oppure A1:B2
+    function normalizeCellRef(s) {
+      if (!s) return "";
+      return String(s).trim().replace(/^[^!]+!\s*/i, "").toUpperCase();
+    }
+
+    // SheetName sempre quotato; se contiene ' va raddoppiato
+    function quoteSheetName(name) {
+      const n = String(name || "").replace(/'/g, "''");
+      return `'${n}'`;
+    }
+
+    // Chiave canonica per far matchare richiesti/ricevuti anche se l’API restituisce quote/spazi diversi
+    function canonicalizeRangeKey(rangeStr) {
+      return String(rangeStr || "")
+        .replace(/'/g, "")
+        .replace(/\s+/g, "")
+        .toUpperCase();
+    }
+
+    // ============================
+    // Charts
+    // ============================
+    let equityChart;
+    let allocChart;
+
+    function initCharts() {
+      equityChart = new Chart(document.getElementById("equityChart"), {
+        type: "line",
+        data: {
+          labels: ["Lun", "Mar", "Mer", "Gio", "Ven", "Oggi"],
+          datasets: [{
+            data: [0, 0, 0, 0, 0, 0],
+            tension: 0.35,
+            fill: true,
+            borderColor: "#4f46e5",
+            backgroundColor: "rgba(79, 70, 229, 0.16)",
+            pointRadius: 0,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { display: false }, grid: { display: false } },
+            y: { ticks: { display: false }, grid: { display: false } }
+          }
+        }
+      });
+
+      allocChart = new Chart(document.getElementById("allocChart"), {
+        type: "doughnut",
+        data: {
+          labels: ["—"],
+          datasets: [{
+            data: [1],
+            backgroundColor: ["rgba(148, 163, 184, 0.9)"],
+            borderColor: "rgba(15,23,42,1)",
+            borderWidth: 2
+          }]
+        },
+        options: { cutout: "65%", plugins: { legend: { display: false } } }
+      });
+    }
+
+    // ============================
+    // Tabs
+    // ============================
+    function setActiveTab(tab) {
+      document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+      document.querySelectorAll("[data-table]").forEach(el => {
+        el.style.display = (el.getAttribute("data-table") === tab) ? "" : "none";
+      });
+    }
+    document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => setActiveTab(btn.dataset.tab)));
+
+    // ============================
+    // Rendering tables
+    // ============================
+    function emptyStateMessage(tbodyId, cols) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = "";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="${cols}" class="text-dim" style="padding: 12px 10px;">Nessun dato per questa tipologia.</td>`;
+      tbody.appendChild(tr);
+    }
+
+    function renderPricedTable(tbodyId, items) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = "";
+      if (!items.length) return emptyStateMessage(tbodyId, 7);
+
+      items.forEach(p => {
+        const tr = document.createElement("tr");
+        const plClass = p.plPct > 0 ? "pill-green" : p.plPct < 0 ? "pill-red" : "pill-neutral";
+        const todayClass = p.todayPct > 0 ? "pill-green" : p.todayPct < 0 ? "pill-red" : "pill-neutral";
+
+        tr.innerHTML = `
+          <td>
+            <div class="col-instrument">
+              <span class="instrument-name">${escapeHtml(p.name || "—")}</span>
+              <span class="instrument-ticker">${escapeHtml(p.isin ? p.isin : "ISIN mancante")}</span>
+            </div>
+          </td>
+          <td>${Number(p.qty || 0).toLocaleString("it-IT")}</td>
+          <td class="text-right">${formatCurrency(p.avgCost)}</td>
+          <td class="text-right">${formatCurrency(p.lastPrice)}</td>
+          <td class="text-right">${formatCurrency(p.value)}</td>
+          <td class="text-right"><span class="pill ${plClass}">${formatCurrency(p.plAbs)} · ${formatPct(p.plPct)}</span></td>
+          <td class="text-right"><span class="pill ${todayClass}">${formatPct(p.todayPct)}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderCashTable(tbodyId, items) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = "";
+      if (!items.length) return emptyStateMessage(tbodyId, 2);
+
+      items.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <div class="col-instrument">
+              <span class="instrument-name">${escapeHtml(p.name || "—")}</span>
+              <span class="instrument-ticker">cash</span>
+            </div>
+          </td>
+          <td class="text-right">${formatCurrency(p.value)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAllTables() {
+      const stocks = positions.filter(p => p.type === "stock");
+      const bonds  = positions.filter(p => p.type === "bond");
+      const cashes = positions.filter(p => p.type === "cash");
+
+      renderPricedTable("tbody-stock", stocks);
+      renderPricedTable("tbody-bond", bonds);
+      renderCashTable("tbody-cash", cashes);
+    }
+
+    // ============================
+    // Summary + allocation
+    // ============================
+    function updateSummary() {
+      const totalValue = positions.reduce((s,p)=>s + Number(p.value || 0), 0);
+      const invested = positions.reduce((s,p)=>s + Number(p.invested || 0), 0);
+      const todayPnl = positions.reduce((s,p)=>s + Number(p.todayAbs || 0), 0);
+
+      const plTotal = totalValue - invested;
+      const plPct = invested > 0 ? (plTotal / invested) * 100 : 0;
+
+      document.getElementById("portfolio-value").textContent = formatCurrency(totalValue);
+      document.getElementById("invested-amount").textContent = formatCurrency(invested);
+      document.getElementById("unrealized-pl").textContent = (plTotal >= 0 ? "+" : "-") + formatCurrency(Math.abs(plTotal));
+
+      const badge = document.getElementById("portfolio-delta");
+      badge.textContent = `${plPct >= 0 ? "▲" : "▼"} ${formatPct(plPct)} Totale`;
+      badge.className = "card-badge" + (plPct >= 0 ? "" : " negative");
+
+      document.getElementById("today-pnl").textContent = (todayPnl >= 0 ? "+" : "-") + formatCurrency(Math.abs(todayPnl));
+      const base = (totalValue - todayPnl) || 1;
+      const todayPct = (todayPnl / base) * 100;
+      const todayBadge = document.getElementById("today-pnl-badge");
+      todayBadge.textContent = `${todayPct >= 0 ? "▲" : "▼"} ${formatPct(todayPct)}`;
+      todayBadge.className = "card-badge" + (todayPct >= 0 ? "" : " negative");
+
+      document.getElementById("num-instruments").textContent = String(positions.length);
+      document.getElementById("num-isin").textContent = String(positions.filter(p => !!p.isin).length);
+      document.getElementById("ytd-pill").textContent = "YTD " + formatPct(plPct);
+
+      if (equityChart) {
+        const series = equityChart.data.datasets[0].data;
+        series[series.length - 1] = Math.round(totalValue);
+        equityChart.update();
+      }
+
+      updateAllocation(totalValue);
+    }
+
+    function updateAllocation(totalValue) {
+      if (!allocChart) return;
+
+      if (!positions.length || totalValue <= 0) {
+        allocChart.data.labels = ["—"];
+        allocChart.data.datasets[0].data = [1];
+        allocChart.data.datasets[0].backgroundColor = ["rgba(148, 163, 184, 0.9)"];
+        allocChart.update();
+        document.getElementById("alloc-pill").textContent = "—";
+        document.getElementById("alloc-top").textContent = "—";
+        document.getElementById("tag-top1").textContent = "—";
+        document.getElementById("tag-top2").textContent = "—";
+        document.getElementById("tag-alloc-a").textContent = "—";
+        document.getElementById("tag-alloc-b").textContent = "—";
+        return;
+      }
+
+      const sorted = [...positions].sort((a,b)=>Number(b.value||0)-Number(a.value||0));
+      const top = sorted.slice(0,5);
+      const others = sorted.slice(5);
+
+      const labels = top.map(p => (p.name || "—").slice(0,18));
+      const data = top.map(p => Math.max(0, Number(p.value||0)));
+      const othersVal = others.reduce((s,p)=>s + Math.max(0, Number(p.value||0)), 0);
+      if (othersVal > 0) { labels.push("Others"); data.push(othersVal); }
+
+      const palette = [
+        "rgba(79, 70, 229, 0.90)",
+        "rgba(34, 197, 94, 0.90)",
+        "rgba(59, 130, 246, 0.90)",
+        "rgba(234, 179, 8, 0.90)",
+        "rgba(239, 68, 68, 0.90)",
+        "rgba(148, 163, 184, 0.90)"
+      ];
+
+      allocChart.data.labels = labels;
+      allocChart.data.datasets[0].data = data;
+      allocChart.data.datasets[0].backgroundColor = labels.map((_,i)=>palette[i % palette.length]);
+      allocChart.update();
+
+      const top1 = top[0], top2 = top[1];
+      const top1pct = top1 ? (Number(top1.value||0)/totalValue)*100 : 0;
+      const top2pct = top2 ? (Number(top2.value||0)/totalValue)*100 : 0;
+
+      document.getElementById("alloc-pill").textContent = "Top1 " + top1pct.toFixed(1) + "%";
+      document.getElementById("alloc-top").textContent = (top1 ? top1pct.toFixed(0) : "0") + "% Top";
+      document.getElementById("tag-top1").textContent = top1 ? `${top1.name.slice(0,14)} ${top1pct.toFixed(1)}%` : "—";
+      document.getElementById("tag-top2").textContent = top2 ? `${top2.name.slice(0,14)} ${top2pct.toFixed(1)}%` : "—";
+      document.getElementById("tag-alloc-a").textContent = top1 ? `${top1.name.slice(0,10)} ${formatCurrency(top1.value)}` : "—";
+      document.getElementById("tag-alloc-b").textContent = top2 ? `${top2.name.slice(0,10)} ${formatCurrency(top2.value)}` : "—";
+    }
+
+    // ============================
+    // Google Sheets batchGet
+    // ============================
+    async function fetchSheetRangesBatch(ranges) {
+      const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(appConfig.spreadsheetId)}/values:batchGet`;
+      const params = new URLSearchParams();
+      params.set("key", appConfig.apiKey);
+      params.set("majorDimension", "ROWS");
+      params.set("valueRenderOption", "UNFORMATTED_VALUE"); // numeri calcolati ma non formattati [web:214]
+      ranges.forEach(r => params.append("ranges", r));      // ranges[] accetta A1, anche multipli [web:144]
+
+      const url = `${base}?${params.toString()}`;
+      const resp = await fetch(url, { method: "GET", headers: { "Accept": "application/json" } });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`Sheets API error ${resp.status}: ${text || resp.statusText}`);
+      }
+      return resp.json();
+    }
+
+    function valueRangeToFlatArray(vr) {
+      const values = vr?.values || [];
+      return values.map(row => (row && row.length ? row[0] : ""));
+    }
+
+    // ============================
+    // justETF quote + name (best effort)
+    // ============================
+    async function fetchJustEtfQuoteByIsin(isin) {
+      const clean = String(isin || "").trim();
+      if (!clean) return null;
+
+      const url =
+        `https://www.justetf.com/api/etfs/${encodeURIComponent(clean)}/quote` +
+        `?locale=${encodeURIComponent(appConfig.pricing.justEtfLocale || "it")}` +
+        `&currency=${encodeURIComponent(appConfig.pricing.currency || "EUR")}`;
+
+      const resp = await fetch(url, { method: "GET", headers: { "Accept": "application/json" } });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        throw new Error(`justETF quote error ${resp.status}: ${txt || resp.statusText}`);
+      }
+      return resp.json();
+    }
+
+    // Parsing HTML (può fallire per CORS, quindi è un best effort)
+    async function fetchJustEtfNameByIsin(isin) {
+      const clean = String(isin || "").trim();
+      if (!clean) return "";
+      const url = `https://www.justetf.com/en/etf-profile.html?isin=${encodeURIComponent(clean)}`;
+      const resp = await fetch(url, { method: "GET" });
+      if (!resp.ok) return "";
+      const html = await resp.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const h1 = doc.querySelector("h1");
+      if (h1 && h1.textContent) return h1.textContent.trim();
+      const title = doc.querySelector("title");
+      if (title && title.textContent) return title.textContent.trim().split("|")[0].trim();
+      return "";
+    }
+
+    // ============================
+    // Mapping config -> ranges -> base items
+    // ============================
+    function validateConfigOrThrow() {
+      if (!appConfig.apiKey) throw new Error("Manca Google Sheets API Key (Config).");
+      if (!appConfig.spreadsheetId) throw new Error("Manca Spreadsheet ID (Config).");
+      if (!appConfig.tabName) throw new Error("Manca Tab name (Config).");
+      if (!Array.isArray(appConfig.rows) || appConfig.rows.length === 0) throw new Error("Manca la configurazione righe.");
+    }
+
+    function buildRangesForConfigRows() {
+      const set = new Set();
+      const sheetPrefix = quoteSheetName(appConfig.tabName);
+
+      appConfig.rows.forEach(r => {
+        const nameRef = normalizeCellRef(r.nameCell);
+        const qtyRef  = normalizeCellRef(r.quoteCell);
+        const pmcRef  = normalizeCellRef(r.pmcCell);
+        const isinRef = normalizeCellRef(r.isinCell);
+
+        if (nameRef) set.add(`${sheetPrefix}!${nameRef}`);
+        if (qtyRef)  set.add(`${sheetPrefix}!${qtyRef}`);
+        if (pmcRef)  set.add(`${sheetPrefix}!${pmcRef}`);
+        if (isinRef) set.add(`${sheetPrefix}!${isinRef}`);
+      });
+
+      return Array.from(set);
+    }
+
+    function mapSheetToBaseItems(mapCanonical) {
+      const out = [];
+      const sheetPrefix = quoteSheetName(appConfig.tabName);
+
+      appConfig.rows.forEach((cfgRow, cfgRowIdx) => {
+        const type = String(cfgRow.type || "").trim().toLowerCase();
+        const finalType = (type === "bond" || type === "cash") ? type : "stock";
+
+        const nameRef = normalizeCellRef(cfgRow.nameCell);
+        const qtyRef  = normalizeCellRef(cfgRow.quoteCell);
+        const pmcRef  = normalizeCellRef(cfgRow.pmcCell);
+        const isinRef = normalizeCellRef(cfgRow.isinCell);
+
+        const nameKey = nameRef ? canonicalizeRangeKey(`${sheetPrefix}!${nameRef}`) : "";
+        const qtyKey  = qtyRef  ? canonicalizeRangeKey(`${sheetPrefix}!${qtyRef}`)  : "";
+        const pmcKey  = pmcRef  ? canonicalizeRangeKey(`${sheetPrefix}!${pmcRef}`)  : "";
+        const isinKey = isinRef ? canonicalizeRangeKey(`${sheetPrefix}!${isinRef}`) : "";
+
+        const nameArr = (nameKey && mapCanonical[nameKey]) ? valueRangeToFlatArray(mapCanonical[nameKey]) : [""];
+        const qtyArr  = (qtyKey  && mapCanonical[qtyKey])  ? valueRangeToFlatArray(mapCanonical[qtyKey])  : [""];
+        const pmcArr  = (pmcKey  && mapCanonical[pmcKey])  ? valueRangeToFlatArray(mapCanonical[pmcKey])  : [""];
+        const isinArr = (isinKey && mapCanonical[isinKey]) ? valueRangeToFlatArray(mapCanonical[isinKey]) : [""];
+
+        const n = Math.max(nameArr.length, qtyArr.length, pmcArr.length, isinArr.length);
+
+        for (let i = 0; i < n; i++) {
+          const nameRaw = String((nameArr[i] ?? nameArr[0] ?? "")).trim();
+          const qtyRaw  = (qtyArr[i] ?? qtyArr[0] ?? "");
+          const pmcRaw  = (pmcArr[i] ?? pmcArr[0] ?? "");
+          const isinRaw = String((isinArr[i] ?? isinArr[0] ?? "")).trim();
+
+          const qty = parseMoneyToNumber(qtyRaw);
+          const avgCost = parseMoneyToNumber(pmcRaw);
+
+          if (!nameRaw && !isinRaw && !qty && !avgCost) continue;
+
+          out.push({
+            key: `${cfgRowIdx}-${i}`,
+            type: finalType,
+            nameFromSheet: nameRaw,
+            qty: Number.isFinite(qty) ? qty : 0,
+            avgCost: Number.isFinite(avgCost) ? avgCost : 0,
+            isin: isinRaw
+          });
+        }
+      });
+
+      return out;
+    }
+
+    // ============================
+    // Load
+    // ============================
+    async function loadData() {
+      setStatusPill("Carico...");
+      try {
+        validateConfigOrThrow();
+        setConfigPill();
+
+        showOverlay("Caricamento celle/range da Google Sheet...");
+        const ranges = buildRangesForConfigRows();
+        if (ranges.length === 0) throw new Error("Nessun range/cella valido nella configurazione.");
+
+        const sheetResp = await fetchSheetRangesBatch(ranges);
+
+        // Indicizza i valueRanges con chiave canonica (robusto su quote/spazi/case)
+        const valueRanges = sheetResp.valueRanges || [];
+        const mapCanonical = {};
+        valueRanges.forEach(vr => {
+          if (vr && vr.range) {
+            mapCanonical[canonicalizeRangeKey(vr.range)] = vr;
+          }
+        });
+
+        const base = mapSheetToBaseItems(mapCanonical);
+
+        // Debug utile se ancora non torna:
+        // console.log("RANGES richiesti:", ranges);
+        // console.log("RANGES ricevuti:", valueRanges.map(v => v.range));
+        // console.log("BASE items:", base);
+
+        if (!base.length) {
+          positions = [];
+          renderAllTables();
+          updateSummary();
+          setStatusPill("Vuoto");
+          showOverlay("Nessun dato letto: controlla le celle/range nel configuratore.");
+          return;
+        }
+
+        showOverlay("Recupero prezzi da justETF (stock/bond)...");
+        setStatusPill("justETF...");
+
+        const isins = Array.from(new Set(base.filter(x => (x.type === "stock" || x.type === "bond") && x.isin).map(x => x.isin)));
+
+        const quoteByIsin = new Map();
+        await Promise.all(isins.map(async isin => {
+          try {
+            const q = await fetchJustEtfQuoteByIsin(isin);
+            quoteByIsin.set(isin, { quote: q, err: null });
+          } catch (e) {
+            quoteByIsin.set(isin, { quote: null, err: e?.message || String(e) });
+          }
+        }));
+
+        const nameByIsin = new Map();
+        await Promise.all(isins.map(async isin => {
+          try {
+            const n = await fetchJustEtfNameByIsin(isin);
+            nameByIsin.set(isin, n || "");
+          } catch {
+            nameByIsin.set(isin, "");
+          }
+        }));
+
+        positions = base.map(x => {
+          if (x.type === "cash") {
+            const name = x.nameFromSheet || "Cash";
+            const value = Number(x.qty || 0); // per cash: quoteCell = importo
+            return {
+              type: "cash",
+              name,
+              isin: "",
+              qty: 0,
+              avgCost: 0,
+              lastPrice: 0,
+              invested: value,
+              value,
+              plAbs: 0,
+              plPct: 0,
+              todayPct: 0,
+              todayAbs: 0
+            };
+          }
+
+          const wrap = x.isin ? quoteByIsin.get(x.isin) : null;
+          const q = wrap?.quote || null;
+
+          const lastPrice = Number(q?.latestQuote?.raw ?? 0);
+          const todayPct = Number(q?.dtdPrc?.raw ?? 0);
+          const todayAbsPerUnit = Number(q?.dtdAmt?.raw ?? 0);
+
+          const nameJ = x.isin ? (nameByIsin.get(x.isin) || "") : "";
+          const name = nameJ || x.nameFromSheet || (x.isin || "Strumento");
+
+          const qty = Number(x.qty || 0);
+          const avgCost = Number(x.avgCost || 0);
+
+          const value = qty * lastPrice;
+          const invested = qty * avgCost;
+
+          const plAbs = value - invested;
+          const plPct = invested > 0 ? (plAbs / invested) * 100 : 0;
+          const todayAbs = qty * todayAbsPerUnit;
+
+          return {
+            type: x.type,
+            name,
+            isin: x.isin,
+            qty,
+            avgCost,
+            lastPrice,
+            invested,
+            value,
+            plAbs,
+            plPct,
+            todayPct,
+            todayAbs,
+            _err: wrap?.err || null
+          };
+        });
+
+        renderAllTables();
+        updateSummary();
+        setLastSyncNow();
+
+        const failed = positions.filter(p => (p.type === "stock" || p.type === "bond") && p.isin && (!p.lastPrice) && p._err);
+        if (failed.length) {
+          setStatusPill("Parziale");
+          showOverlay(
+            "Caricamento completato, ma alcune quote non sono state recuperate:\n\n" +
+            failed.slice(0, 10).map(p => `- ${p.name} (${p.isin}): ${p._err}`).join("\n") +
+            (failed.length > 10 ? `\n... +${failed.length - 10} altre` : "")
+          );
+          return;
+        }
+
+        setStatusPill("OK");
+        hideOverlay();
+
+      } catch (err) {
+        console.error(err);
+        setStatusPill("Errore");
+        showOverlay("Errore:\n\n" + (err?.message || String(err)));
+      }
+    }
+
+    // ============================
+    // Config modal
+    // ============================
+    function openConfigModal() {
+      document.getElementById("configOverlay").style.display = "flex";
+      document.getElementById("configOverlay").setAttribute("aria-hidden", "false");
+      fillConfigFormFromState();
+      renderConfigRows();
+    }
+
+    function closeConfigModal() {
+      document.getElementById("configOverlay").style.display = "none";
+      document.getElementById("configOverlay").setAttribute("aria-hidden", "true");
+    }
+
+    function fillConfigFormFromState() {
+      document.getElementById("cfg-apiKey").value = appConfig.apiKey || "";
+      document.getElementById("cfg-spreadsheetId").value = appConfig.spreadsheetId || "";
+      document.getElementById("cfg-tabName").value = appConfig.tabName || "";
+    }
+
+    function readConfigFormIntoState() {
+      appConfig.apiKey = String(document.getElementById("cfg-apiKey").value || "").trim();
+      appConfig.spreadsheetId = String(document.getElementById("cfg-spreadsheetId").value || "").trim();
+      appConfig.tabName = String(document.getElementById("cfg-tabName").value || "").trim();
+    }
+
+    function renderConfigRows() {
+      const tbody = document.getElementById("cfg-rows");
+      tbody.innerHTML = "";
+
+      if (!Array.isArray(appConfig.rows)) appConfig.rows = [];
+
+      if (appConfig.rows.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="6" class="text-dim">Nessuna riga. Premi “+ Aggiungi riga” oppure “Carica esempio”.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      appConfig.rows.forEach((r, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <select data-k="type" data-i="${idx}">
+              <option value="stock" ${String(r.type||"") === "stock" ? "selected" : ""}>stock</option>
+              <option value="bond"  ${String(r.type||"") === "bond"  ? "selected" : ""}>bond</option>
+              <option value="cash"  ${String(r.type||"") === "cash"  ? "selected" : ""}>cash</option>
+            </select>
+          </td>
+          <td><input data-k="nameCell" data-i="${idx}" placeholder="(cash) A30:A31 (opzionale stock/bond)" value="${escapeAttr(r.nameCell||"")}"></td>
+          <td><input data-k="quoteCell" data-i="${idx}" placeholder="N4:N9 (quote) / (cash) importo" value="${escapeAttr(r.quoteCell||"")}"></td>
+          <td><input data-k="pmcCell" data-i="${idx}" placeholder="P4:P9 (PMC) (vuoto cash)" value="${escapeAttr(r.pmcCell||"")}"></td>
+          <td><input data-k="isinCell" data-i="${idx}" placeholder="Q4:Q9 (ISIN) (vuoto cash)" value="${escapeAttr(r.isinCell||"")}"></td>
+          <td>
+            <div class="row-actions">
+              <button class="btn-small" data-action="dup" data-i="${idx}" type="button">Dup</button>
+              <button class="btn-small danger" data-action="del" data-i="${idx}" type="button">Elimina</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll("input[data-k][data-i], select[data-k][data-i]").forEach(inp => {
+        const handler = (e) => {
+          const i = Number(e.target.getAttribute("data-i"));
+          const k = e.target.getAttribute("data-k");
+          if (!appConfig.rows[i]) return;
+          appConfig.rows[i][k] = e.target.value;
+        };
+        inp.addEventListener("input", handler);
+        inp.addEventListener("change", handler);
+      });
+
+      tbody.querySelectorAll("button[data-action][data-i]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const i = Number(e.target.getAttribute("data-i"));
+          const action = e.target.getAttribute("data-action");
+          if (action === "del") {
+            appConfig.rows.splice(i, 1);
+            renderConfigRows();
+          }
+          if (action === "dup") {
+            const copy = structuredClone(appConfig.rows[i] || {});
+            appConfig.rows.splice(i + 1, 0, copy);
+            renderConfigRows();
+          }
+        });
+      });
+    }
+
+    function addRow() {
+      appConfig.rows.push({ type: "stock", nameCell: "", quoteCell: "", pmcCell: "", isinCell: "" });
+      renderConfigRows();
+    }
+
+    function loadExampleRows() {
+      appConfig.rows = [
+        { type: "stock", nameCell: "",         quoteCell: "N4:N9",    pmcCell: "P4:P9",    isinCell: "Q4:Q9" },
+        { type: "bond",  nameCell: "",         quoteCell: "N12",      pmcCell: "P12",      isinCell: "Q12" },
+        { type: "cash",  nameCell: "A30:A31",  quoteCell: "N30:N31",  pmcCell: "",         isinCell: "" }
+      ];
+      renderConfigRows();
+    }
+
+    function resetConfig() {
+      appConfig = structuredClone(defaultConfig);
+      saveConfig(appConfig);
+      fillConfigFormFromState();
+      renderConfigRows();
+      setConfigPill();
+    }
+
+    function persistConfigAndClose() {
+      readConfigFormIntoState();
+      appConfig.rows = (appConfig.rows || []).map(r => ({
+        type: String(r.type || "stock").trim().toLowerCase(),
+        nameCell: String(r.nameCell || "").trim(),
+        quoteCell: String(r.quoteCell || "").trim(),
+        pmcCell: String(r.pmcCell || "").trim(),
+        isinCell: String(r.isinCell || "").trim()
+      }));
+      saveConfig(appConfig);
+      setConfigPill();
+      closeConfigModal();
+    }
+
+    // ============================
+    // Wire up + init
+    // ============================
+    document.getElementById("btn-close").addEventListener("click", hideOverlay);
+    document.getElementById("btn-config").addEventListener("click", openConfigModal);
+    document.getElementById("btn-config-close").addEventListener("click", closeConfigModal);
+    document.getElementById("btn-config-save").addEventListener("click", persistConfigAndClose);
+    document.getElementById("btn-config-reset").addEventListener("click", resetConfig);
+    document.getElementById("btn-add-row").addEventListener("click", addRow);
+    document.getElementById("btn-load-example").addEventListener("click", loadExampleRows);
+
+    document.getElementById("btn-load").addEventListener("click", loadData);
+    document.getElementById("btn-refresh-ui").addEventListener("click", () => {
+      renderAllTables();
+      updateSummary();
+      setLastSyncNow();
+    });
+
+    initCharts();
+    setConfigPill();
+    setActiveTab("stock");
+    renderAllTables();
+    updateSummary();
+  </script>
+</body>
+</html>
