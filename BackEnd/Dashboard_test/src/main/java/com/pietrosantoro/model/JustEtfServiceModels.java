@@ -1,4 +1,4 @@
-package com.pietrosantoro.service;
+package com.pietrosantoro.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

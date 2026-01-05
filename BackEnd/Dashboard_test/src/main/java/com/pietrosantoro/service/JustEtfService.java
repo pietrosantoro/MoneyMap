@@ -2,8 +2,13 @@ package com.pietrosantoro.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pietrosantoro.dto.EtfInfo;
+import com.pietrosantoro.factory.JustEtfFactory;
+import com.pietrosantoro.model.JustEtfServiceModels;
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -13,8 +18,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+@Slf4j
 @Service
 public class JustEtfService {
+
+    @Autowired
+    private JustEtfFactory factory;
 
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -31,19 +40,18 @@ public class JustEtfService {
         JustEtfServiceModels.QuoteResponse quote = fetchQuote(cleanIsin, locale, currency);
         String name = fetchName(cleanIsin);
 
-        Double price = quote.latestQuote != null ? quote.latestQuote.raw : null;
-        Double dtdPrc = quote.dtdPrc != null ? quote.dtdPrc.raw : null;
-        Double dtdAmt = quote.dtdAmt != null ? quote.dtdAmt.raw : null;
+        return factory.fromQuoteToEtfInfo(quote,name,cleanIsin);
+    }
 
-        EtfInfo out = new EtfInfo();
-        out.setIsin(cleanIsin);
-        out.setName((name == null || name.isBlank()) ? cleanIsin : name);
-        out.setPrice(price);
-        out.setDtdPrc(dtdPrc);
-        out.setDtdAmt(dtdAmt);
-        out.setAsOf(quote.latestQuoteDate);
-        out.setVenue(quote.quoteTradingVenue);
-        return out;
+    @CachePut(cacheNames = "etfInfo", key = "#isin + '|' + #locale + '|' + #currency")
+    public EtfInfo refreshEtfInfo(String isin, String locale, String currency) throws Exception{
+        String cleanIsin = (isin == null ? "" : isin.trim());
+        if (cleanIsin.isEmpty()) throw new IllegalArgumentException("ISIN mancante");
+
+        JustEtfServiceModels.QuoteResponse quote = fetchQuote(cleanIsin, locale, currency);
+        String name = fetchName(cleanIsin);
+
+        return factory.fromQuoteToEtfInfo(quote,name,cleanIsin);
     }
 
     private JustEtfServiceModels.QuoteResponse fetchQuote(String isin, String locale, String currency) throws Exception {
@@ -63,6 +71,7 @@ public class JustEtfService {
         if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
             throw new RuntimeException("justETF quote HTTP " + resp.statusCode() + ": " + resp.body());
         }
+        log.info("JustEtf quote response: " + resp.body());
         return om.readValue(resp.body(), JustEtfServiceModels.QuoteResponse.class);
     }
 
